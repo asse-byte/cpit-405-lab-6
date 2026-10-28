@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPIT-405 lab 6 - Like / Dislike</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f3f4f6;
+      color: #1f2937;
+      margin: 0;
+      padding: 30px 16px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 28px;
+      width: 100%;
+      max-width: 520px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    h1 { margin: 0 0 4px; font-size: 1.6rem; }
+    .sub { color: #6b7280; margin: 0 0 22px; font-size: 0.9rem; }
+
+    .vote-row {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .vote-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px;
+      font-size: 1.05rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      transition: transform 0.12s, border-color 0.15s, background 0.15s;
+    }
+
+    .vote-btn:hover { background: #f9fafb; }
+    .vote-btn:active { transform: scale(0.96); }
+
+    /* highlight the chosen button */
+    .vote-btn.chosen.like    { border-color: #16a34a; background: #f0fdf4; }
+    .vote-btn.chosen.dislike { border-color: #dc2626; background: #fef2f2; }
+
+    .count {
+      font-weight: bold;
+      background: #eef2ff;
+      border-radius: 20px;
+      padding: 2px 12px;
+      min-width: 38px;
+      text-align: center;
+    }
+
+    .comment-row { display: flex; gap: 10px; margin-bottom: 8px; }
+
+    #comment-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 0.95rem;
+    }
+
+    button.action {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #0f766e;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button.action:hover { background: #0d615a; }
+
+    .hint { font-size: 0.8rem; color: #9ca3af; margin: 4px 0 20px; min-height: 16px; }
+
+    h2 { font-size: 1rem; margin: 0 0 10px; }
+
+    #comments {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 22px;
+    }
+    #comments li {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      font-size: 0.92rem;
+      word-break: break-word;
+    }
+    #comments .none { color: #9ca3af; border: none; background: none; padding: 0; }
+
+    #reset {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fff;
+      color: #374151;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    #reset:hover { background: #f9fafb; }
+
+    #toast {
+      text-align: center;
+      color: #16a34a;
+      font-size: 0.85rem;
+      height: 18px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Do you like this lab?</h1>
+    <p class="sub">CPIT-405 Lab 6 &mdash; Abdoul Malick Cisse</p>
+
+    <!-- Like / Dislike -->
+    <div class="vote-row">
+      <button class="vote-btn like" id="like-btn">
+        &#128077; Like <span class="count" id="like-count">0</span>
+      </button>
+      <button class="vote-btn dislike" id="dislike-btn">
+        &#128078; Dislike <span class="count" id="dislike-count">0</span>
+      </button>
+    </div>
+
+    <!-- Comment -->
+    <div class="comment-row">
+      <input type="text" id="comment-input" placeholder="Leave a comment with your vote...">
+      <button class="action" id="comment-btn">Submit</button>
+    </div>
+    <p class="hint" id="comment-hint"></p>
+
+    <!-- Comments list -->
+    <h2>Comments</h2>
+    <ul id="comments"></ul>
+
+    <!-- Reset -->
+    <button id="reset">Reset my vote &amp; comments</button>
+    <p id="toast"></p>
+  </div>
+
+  <script>
+    // ================= Cookie helpers =================
+    function setCookie(name, value, days) {
+      const d = new Date();
+      d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+      document.cookie = name + "=" + encodeURIComponent(value) +
+                        ";expires=" + d.toUTCString() + ";path=/";
+    }
+
+    function getCookie(name) {
+      const parts = document.cookie.split("; ");
+      for (const part of parts) {
+        const [k, v] = part.split("=");
+        if (k === name) return decodeURIComponent(v);
+      }
+      return null;
+    }
+
+    function deleteCookie(name) {
+      document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
+    }
+
+    // ================= State =================
+    let likeCount = 0;
+    let dislikeCount = 0;
+    let comments = [];
+
+    // ================= DOM references =================
+    const likeBtn      = document.getElementById("like-btn");
+    const dislikeBtn   = document.getElementById("dislike-btn");
+    const likeCountEl  = document.getElementById("like-count");
+    const dislikeCountEl = document.getElementById("dislike-count");
+    const commentInput = document.getElementById("comment-input");
+    const commentBtn   = document.getElementById("comment-btn");
+    const commentHint  = document.getElementById("comment-hint");
+    const commentsList = document.getElementById("comments");
+    const resetBtn     = document.getElementById("reset");
+    const toast        = document.getElementById("toast");
+
+    // ================= Render =================
+    function renderCounts() {
+      likeCountEl.textContent = likeCount;
+      dislikeCountEl.textContent = dislikeCount;
+
+      const vote = getCookie("vote");
+      likeBtn.classList.toggle("chosen", vote === "like");
+      dislikeBtn.classList.toggle("chosen", vote === "dislike");
+    }
+
+    function renderComments() {
+      commentsList.innerHTML = "";
+      if (comments.length === 0) {
+        const li = document.createElement("li");
+        li.className = "none";
+        li.textContent = "No comments yet.";
+        commentsList.appendChild(li);
+        return;
+      }
+      comments.forEach(text => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        commentsList.appendChild(li);
+      });
+    }
+
+    // ================= Voting =================
+    function vote(choice) {
+      if (getCookie("vote")) {
+        commentHint.textContent = "You already voted. Reset first to vote again.";
+        return;
+      }
+      if (choice === "like") likeCount++;
+      else dislikeCount++;
+
+      setCookie("vote", choice, 7);
+      setCookie("likeCount", likeCount, 7);
+      setCookie("dislikeCount", dislikeCount, 7);
+      commentHint.textContent = "";
+      renderCounts();
+    }
+
+    likeBtn.addEventListener("click", () => vote("like"));
+    dislikeBtn.addEventListener("click", () => vote("dislike"));
+
+    // ================= Comments =================
+    function submitComment() {
+      const text = commentInput.value.trim();
+      if (text === "") {
+        commentHint.textContent = "Please write something first.";
+        return;
+      }
+      if (getCookie("commented")) {
+        commentHint.textContent = "You already left a comment. Reset first to comment again.";
+        return;
+      }
+
+      comments.push(text);
+      setCookie("commented", "yes", 7);
+      setCookie("comments", JSON.stringify(comments), 7);
+
+      commentInput.value = "";
+      commentHint.textContent = "";
+      renderComments();
+    }
+
+    commentBtn.addEventListener("click", submitComment);
+    // bonus: Enter key submits too
+    commentInput.addEventListener("keyup", (e) => {
+      if (e.key === "Enter") submitComment();
+    });
+
+    // ================= Reset =================
+    resetBtn.addEventListener("click", () => {
+      deleteCookie("vote");
+      deleteCookie("likeCount");
+      deleteCookie("dislikeCount");
+      deleteCookie("commented");
+      deleteCookie("comments");
+
+      likeCount = 0;
+      dislikeCount = 0;
+      comments = [];
+
+      commentHint.textContent = "";
+      renderCounts();
+      renderComments();
+
+      toast.textContent = "Your vote and comments were reset.";
+      setTimeout(() => { toast.textContent = ""; }, 2500);
+    });
+
+    // ================= On load: restore from cookies =================
+    function init() {
+      likeCount    = parseInt(getCookie("likeCount"))    || 0;
+      dislikeCount = parseInt(getCookie("dislikeCount")) || 0;
+
+      const saved = getCookie("comments");
+      if (saved) {
+        try { comments = JSON.parse(saved); } catch (e) { comments = []; }
+      }
+
+      renderCounts();
+      renderComments();
+    }
+
+    init();
+  </script>
+</body>
+</html>
